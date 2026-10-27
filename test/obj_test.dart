@@ -1,148 +1,106 @@
+
 import 'package:flutter_test/flutter_test.dart';
 
-abstract class Pessoa {
-  late int _id;
-  String nome;
-
-  Pessoa(this.nome);
-
-  int get id => _id;
-
-  set id(int id) {
-    if (id > 0) {
-      _id = id;
-    } else {
-      throw ArgumentError('Identificador deve ser positivo.');
-    }
-  }
+Future<int> process() async {
+  await Future.delayed(Duration(seconds: 5));
+  return 0;
 }
 
-mixin Ano {
-  late int _ano;
+Map<String, List<double>> alunos = {
+  'Maria': [8.0, 9.0],
+  'Bruna': [7.0, 7.0],
+  'Carla': [10.0, 9.0],
+};
 
-  int get ano => _ano;
-
-  set ano(int ano) {
-    if (ano > 0) {
-      _ano = ano;
-    } else {
-      throw ArgumentError('Ano deve ser positivo.');
-    }
-  }
-}
-
-class Aluno extends Pessoa with Ano {
-  Aluno(super.nome, int ano) {
-    this.ano = ano;
-  }
-}
-
-class Professor extends Pessoa {
-  Professor(super.nome);
-}
-
-class Disciplina {
-  String nome;
-
-  Disciplina(this.nome);
-}
-
-class Turma with Ano {
-  Disciplina disciplina;
-  Professor professor;
-
-  final List<Aluno> _alunos = [];
-
-  Turma(this.disciplina, this.professor, int ano) {
-    this.ano = ano;
-  }
-
-  void matricular(Aluno aluno) {
-    if (aluno.ano == ano) {
-      _alunos.add(aluno);
-    } else {
-      throw ArgumentError('O ano do aluno deve ser igual ao da turma.');
-    }
-  }
-}
-
-class Historico extends Turma {
-  final Map<Aluno, List<double>> notas = {};
-
-  Historico(super.disciplina, super.professor, super.ano);
-
-  @override
-  void matricular(Aluno aluno) {
-    super.matricular(aluno);
-    notas[aluno] = [];
-  }
-
-  double media(Aluno aluno) {
-    final listaNotas = notas[aluno]!;
-
-    if (listaNotas.isEmpty) {
-      return 0.0;
+Future<List<double>?> search(String key) async {
+  return Future.delayed(Duration(seconds: 2), () {
+    if (alunos.containsKey(key)) {
+      return alunos[key]!;
     }
 
-    double soma = 0;
+    throw ArgumentError('Aluno não encontrado.');
+  });
+}
 
-    for (double nota in listaNotas) {
-      soma += nota;
+Stream<int> count() async* {
+  for (int i = 1; i <= 3; i++) {
+    await Future.delayed(Duration(seconds: 1));
+    yield i;
+  }
+}
+
+Stream<double> media(List<String> nomes) async* {
+  for (String nome in nomes) {
+    try {
+      List<double>? notas = await search(nome);
+
+      double soma = 0;
+
+      for (double nota in notas!) {
+        soma += nota;
+      }
+
+      double resultado = soma / notas.length;
+
+      yield resultado;
+    } catch (error) {
+      yield* Stream<double>.error(error);
     }
-
-    return soma / listaNotas.length;
   }
 }
 
 void main() {
-  test('Testar matrícula de alunos', () {
-    Disciplina disciplina1 = Disciplina('Flutter');
+  group('Testes de programação assíncrona', () {
+    late Future<int> result;
 
-    Professor professor1 = Professor('Carlos');
-    professor1.id = 10;
+    setUp(() => result = process());
 
-    Historico historico1 = Historico(
-      disciplina1,
-      professor1,
-      2023,
-    );
+    test('Aguardando...', () {
+      expect(result, isNotNull);
+    });
 
-    // Cadastrar primeiro aluno sem erros.
-    Aluno aluno1 = Aluno('Maria', 2023);
-    aluno1.id = 1;
+    test('Testando o resultado', () async {
+      int num = await result;
+      expect(num, 0);
+    });
 
-    historico1.matricular(aluno1);
+    test('Testando busca sem erros em Future', () async {
+      List<double>? notas = await search('Maria');
+      expect(notas, [8.0, 9.0]);
+    });
 
-    expect(historico1.media(aluno1), 0.0);
-    expect(historico1.professor.nome, 'Carlos');
-    expect(historico1.professor.id, 10);
+    test('Testando busca com erros em Future', () async {
+      await expectLater(
+        search('Paula'),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
 
-    // Cadastrar segundo aluno com erros.
-    Aluno aluno2 = Aluno('Paula', 2022);
+    test('Testando contagem em Stream', () async {
+      List<int> resultados = [];
 
-    expect(
-      () => aluno2.id = 0,
-      throwsA(isA<ArgumentError>()),
-    );
+      await for (int resultado in count()) {
+        resultados.add(resultado);
+      }
 
-    expect(
-      () => historico1.matricular(aluno2),
-      throwsA(isA<ArgumentError>()),
-    );
-  });
+      expect(resultados, [1, 2, 3]);
+    });
 
-  test('Testar cálculo da média das notas', () {
-    Disciplina disciplina = Disciplina('Matemática');
-    Professor professor = Professor('Ana');
-    Historico historico = Historico(disciplina, professor, 2023);
+    test('Testando media em Stream', () async {
+      List<double> resultados = [];
+      List<Object> erros = [];
 
-    Aluno aluno = Aluno('João', 2023);
-    aluno.id = 2;
+      await media(['Maria', 'Paula', 'Bruna']).forEach(
+        (resultado) {
+          resultados.add(resultado);
+        },
+      ).catchError((error) {
+        erros.add(error);
+      });
 
-    historico.matricular(aluno);
-
-    historico.notas[aluno]!.addAll([8.0, 6.0, 10.0]);
-
-    expect(historico.media(aluno), 8.0);
+      expect(resultados, [8.5]);
+      expect(erros, isNotEmpty);
+      expect(erros.first, isA<ArgumentError>());
+    });
   });
 }
